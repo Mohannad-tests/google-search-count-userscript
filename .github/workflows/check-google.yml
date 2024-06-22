@@ -2,7 +2,9 @@ name: Check Google Element
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
 
 jobs:
   check-google:
@@ -15,19 +17,19 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v2
       with:
-        node-version: '14'
+        node-version: '22'
 
-    - name: Cache Node.js modules
-      id: cache-node-modules
-      uses: actions/cache@v3
-      with:
-        path: node_modules
-        key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-        restore-keys: |
-          ${{ runner.os }}-node-
+    # - name: Cache Node.js modules
+    #   id: cache-node-modules
+    #   uses: actions/cache@v3
+    #   with:
+    #     path: node_modules
+    #     key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+    #     restore-keys: |
+    #       ${{ runner.os }}-node-
 
     - name: Install dependencies
-      if: steps.cache-node-modules.outputs.cache-hit != 'true'
+      # if: steps.cache-node-modules.outputs.cache-hit != 'true'
       run: npm install
 
     - name: Check for existing issues
@@ -40,7 +42,7 @@ jobs:
             repo: context.repo.repo,
             state: 'open'
           });
-          const existingIssue = issues.data.find(issue => issue.title === 'Element not found error in check-google.js');
+          const existingIssue = issues.data.find(issue => issue.title === 'Google: Element not found error');
           return existingIssue ? 'true' : 'false';
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
