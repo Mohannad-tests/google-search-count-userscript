@@ -116,22 +116,6 @@ async function createPR() {
     sha: baseSha
   });
 
-  // Fetch the current SHA for screenshot_before.png
-  const { data: beforeFileData } = await octokit.repos.getContent({
-    owner: OWNER,
-    repo: REPO,
-    path: 'screenshot_before.png',
-    ref: branchName
-  });
-
-  // Fetch the current SHA for screenshot_after.png
-  const { data: afterFileData } = await octokit.repos.getContent({
-    owner: OWNER,
-    repo: REPO,
-    path: 'screenshot_after.png',
-    ref: branchName
-  });
-
   const beforeScreenshot = fs.readFileSync('./screenshot_before.png', { encoding: 'base64' });
   const afterScreenshot = fs.readFileSync('./screenshot_after.png', { encoding: 'base64' });
 
@@ -142,8 +126,7 @@ async function createPR() {
     path: 'screenshot_before.png',
     message: 'Update screenshot_before.png',
     content: beforeScreenshot,
-    branch: branchName,
-    sha: beforeFileData.sha
+    branch: branchName
   });
 
   // Update screenshot_after.png
@@ -153,8 +136,7 @@ async function createPR() {
     path: 'screenshot_after.png',
     message: 'Update screenshot_after.png',
     content: afterScreenshot,
-    branch: branchName,
-    sha: afterFileData.sha
+    branch: branchName
   });
 
   // Create a pull request
@@ -167,4 +149,3 @@ async function createPR() {
     body: 'Automated PR to update screenshots after running the script.'
   });
 }
-
