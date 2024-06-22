@@ -1,5 +1,8 @@
 import { Octokit } from '@octokit/rest';
 import puppeteer from 'puppeteer';
+import fs from 'fs';
+import pixelmatch from 'pixelmatch';
+import { PNG } from 'pngjs';
 
 const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
 
@@ -12,60 +15,135 @@ const REPO = 'google-search-count-userscript';
   });
   const page = await browser.newPage();
 
+  await page.setViewport({ width: 400, height: 300 });
   await page.setExtraHTTPHeaders({
     'Accept-Language': 'en-US'
   });
 
-  await page.goto('https://www.google.com/search?hl=en&q=puppeteer');
+  await page.goto('https://www.google.com/search?hl=en&q=Google+Search+Results+Count');
+
+  // Take a screenshot before running the script
+  await page.screenshot({ path: './screenshot_before.png' });
 
   const exists = await page.evaluate(() => {
     return !!document.getElementById('result-stats') && document.getElementById('appbar');
   });
 
   if (!exists) {
-    const content = await page.content();
-    console.log(content);
-
-    const issues = await octokit.issues.listForRepo({
-      owner: OWNER,
-      repo: REPO,
-      state: 'open'
-    });
-
-    const existingIssue = issues.data.find(issue => issue.title === 'Google: Element not found error');
-
-    if (!existingIssue) {
-      await octokit.issues.create({
-        owner: OWNER,
-        repo: REPO,
-        title: 'Google: Element not found error',
-        body: 'The expected element was not found on the page. The cron job will be paused until this issue is resolved.'
-      });
-    }
-
-    throw new Error('Element not found');
-  }
-
-  if (await page.evaluate(() => {
-    const elRect = document.getElementById('result-stats').getBoundingClientRect();
-    return elRect.top > 0;
-  })) {
-    throw new Error('Element is visible before appending');
+    await handleIssue(page, 'The expected element was not found on the page before running the script.');
+    await browser.close();
+    process.exit(1);
   }
 
   await page.addScriptTag({ path: 'userscript.js' });
 
-  await page.waitForFunction(() => {
-    return window.dispatchEvent(new CustomEvent('load'));
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('load'));
   });
 
-  if (! (await page.evaluate(() => {
+  // Take a screenshot after running the script
+  await page.screenshot({ path: './screenshot_after.png' });
+
+  const visible = await page.evaluate(() => {
     return Array.from(document.querySelectorAll('#result-stats')).some(el => el.getBoundingClientRect().top > 0);
-  }))) {
-    throw new Error('Element is not visible after appending');
+  });
+
+  if (!visible) {
+    await handleIssue(page, 'The expected element was not found on the page after running the script.');
+    await browser.close();
+    process.exit(1);
+  }
+
+  const before = PNG.sync.read(fs.readFileSync('./screenshot_before.png'));
+  const after = PNG.sync.read(fs.readFileSync('./screenshot_after.png'));
+  const { width, height } = before;
+  const diff = new PNG({ width, height });
+
+  const numDiffPixels = pixelmatch(before.data, after.data, diff.data, width, height, { threshold: 0.1 });
+
+  if (numDiffPixels > 0) {
+    await createPR();
   }
 
   console.log('All good');
-
   await browser.close();
 })();
+
+async function handleIssue(page, errorMessage) {
+  const issues = await octokit.issues.listForRepo({
+    owner: OWNER,
+    repo: REPO,
+    state: 'open'
+  });
+
+  const existingIssue = issues.data.find(issue => issue.title === 'Error: Something is not working');
+
+  if (!existingIssue) {
+    const beforeScreenshot = fs.readFileSync('./screenshot_before.png', { encoding: 'base64' });
+    const afterScreenshot = fs.readFileSync('./screenshot_after.png', { encoding: 'base64' });
+
+    await octokit.issues.create({
+      owner: OWNER,
+      repo: REPO,
+      title: 'Error: Something is not working',
+      body: `${errorMessage}
+
+Before Screenshot:
+![Before](data:image/png;base64,${beforeScreenshot})
+
+After Screenshot:
+![After](data:image/png;base64,${afterScreenshot})`,
+      labels: ['bug']
+    });
+  }
+}
+
+async function createPR() {
+  const branchName = `screenshot-update-${Date.now()}`;
+  const { data: refData } = await octokit.git.getRef({
+    owner: OWNER,
+    repo: REPO,
+    ref: 'heads/main'
+  });
+
+  const baseSha = refData.object.sha;
+
+  const { data: branch } = await octokit.git.createRef({
+    owner: OWNER,
+    repo: REPO,
+    ref: `refs/heads/${branchName}`,
+    sha: baseSha
+  });
+
+  const beforeScreenshot = fs.readFileSync('./screenshot_before.png', { encoding: 'base64' });
+  const afterScreenshot = fs.readFileSync('./screenshot_after.png', { encoding: 'base64' });
+
+  await octokit.repos.createOrUpdateFileContents({
+    owner: OWNER,
+    repo: REPO,
+    path: 'screenshot_after.png',
+    message: 'Update screenshot_after.png',
+    content: afterScreenshot,
+    branch: branchName,
+    sha: baseSha
+  });
+
+  await octokit.repos.createOrUpdateFileContents({
+    owner: OWNER,
+    repo: REPO,
+    path: 'screenshot_before.png',
+    message: 'Update screenshot_before.png',
+    content: beforeScreenshot,
+    branch: branchName,
+    sha: baseSha
+  });
+
+  await octokit.pulls.create({
+    owner: OWNER,
+    repo: REPO,
+    title: 'Update screenshots',
+    head: branchName,
+    base: 'main',
+    body: 'Automated PR to update screenshots after running the script.'
+  });
+}

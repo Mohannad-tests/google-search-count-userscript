@@ -1,10 +1,9 @@
 name: Check Google Element
 
 on:
-  schedule:
-    - cron: '*/30 * * * *'
+  # schedule:
+    # - cron: '*/30 * * * *'
   workflow_dispatch:
-
 
 jobs:
   check-google:
@@ -19,17 +18,7 @@ jobs:
       with:
         node-version: '22'
 
-    # - name: Cache Node.js modules
-    #   id: cache-node-modules
-    #   uses: actions/cache@v3
-    #   with:
-    #     path: node_modules
-    #     key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
-    #     restore-keys: |
-    #       ${{ runner.os }}-node-
-
     - name: Install dependencies
-      # if: steps.cache-node-modules.outputs.cache-hit != 'true'
       run: npm install
 
     - name: Check for existing issues
