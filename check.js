@@ -108,26 +108,34 @@ async function createPR() {
 
   const baseSha = refData.object.sha;
 
-  const { data: branch } = await octokit.git.createRef({
+  // Create a new branch from main
+  await octokit.git.createRef({
     owner: OWNER,
     repo: REPO,
     ref: `refs/heads/${branchName}`,
     sha: baseSha
   });
 
-  const beforeScreenshot = fs.readFileSync('./screenshot_before.png', { encoding: 'base64' });
-  const afterScreenshot = fs.readFileSync('./screenshot_after.png', { encoding: 'base64' });
+  // Fetch the current SHA for screenshot_before.png
+  const { data: beforeFileData } = await octokit.repos.getContent({
+    owner: OWNER,
+    repo: REPO,
+    path: 'screenshot_before.png',
+    ref: branchName
+  });
 
-  await octokit.repos.createOrUpdateFileContents({
+  // Fetch the current SHA for screenshot_after.png
+  const { data: afterFileData } = await octokit.repos.getContent({
     owner: OWNER,
     repo: REPO,
     path: 'screenshot_after.png',
-    message: 'Update screenshot_after.png',
-    content: afterScreenshot,
-    branch: branchName,
-    sha: baseSha
+    ref: branchName
   });
 
+  const beforeScreenshot = fs.readFileSync('./screenshot_before.png', { encoding: 'base64' });
+  const afterScreenshot = fs.readFileSync('./screenshot_after.png', { encoding: 'base64' });
+
+  // Update screenshot_before.png
   await octokit.repos.createOrUpdateFileContents({
     owner: OWNER,
     repo: REPO,
@@ -135,9 +143,21 @@ async function createPR() {
     message: 'Update screenshot_before.png',
     content: beforeScreenshot,
     branch: branchName,
-    sha: baseSha
+    sha: beforeFileData.sha
   });
 
+  // Update screenshot_after.png
+  await octokit.repos.createOrUpdateFileContents({
+    owner: OWNER,
+    repo: REPO,
+    path: 'screenshot_after.png',
+    message: 'Update screenshot_after.png',
+    content: afterScreenshot,
+    branch: branchName,
+    sha: afterFileData.sha
+  });
+
+  // Create a pull request
   await octokit.pulls.create({
     owner: OWNER,
     repo: REPO,
@@ -147,3 +167,4 @@ async function createPR() {
     body: 'Automated PR to update screenshots after running the script.'
   });
 }
+
