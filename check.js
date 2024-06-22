@@ -22,7 +22,6 @@ const REPO = 'google-search-count-userscript';
 
   await page.goto('https://www.google.com/search?hl=en&q=Google+Search+Results+Count');
 
-  // Take a screenshot before running the script
   await page.screenshot({ path: './screenshot_before.png' });
 
   const exists = await page.evaluate(() => {
@@ -41,7 +40,6 @@ const REPO = 'google-search-count-userscript';
     window.dispatchEvent(new CustomEvent('load'));
   });
 
-  // Take a screenshot after running the script
   await page.screenshot({ path: './screenshot_after.png' });
 
   const visible = await page.evaluate(() => {
@@ -108,7 +106,6 @@ async function createPR() {
 
   const baseSha = refData.object.sha;
 
-  // Create a new branch from main
   await octokit.git.createRef({
     owner: OWNER,
     repo: REPO,
@@ -119,7 +116,6 @@ async function createPR() {
   const beforeScreenshot = fs.readFileSync('./screenshot_before.png', { encoding: 'base64' });
   const afterScreenshot = fs.readFileSync('./screenshot_after.png', { encoding: 'base64' });
 
-  // Fetch the latest sha for screenshot_before.png
   const { data: beforeFileData } = await octokit.repos.getContent({
     owner: OWNER,
     repo: REPO,
@@ -128,18 +124,24 @@ async function createPR() {
   });
   const beforeFileSha = beforeFileData.sha;
 
-  // Update screenshot_before.png
+  await octokit.repos.deleteFile({
+    owner: OWNER,
+    repo: REPO,
+    path: 'screenshot_before.png',
+    message: 'Delete old screenshot_before.png',
+    sha: beforeFileSha,
+    branch: branchName
+  });
+
   await octokit.repos.createOrUpdateFileContents({
     owner: OWNER,
     repo: REPO,
     path: 'screenshot_before.png',
-    message: 'Update screenshot_before.png',
+    message: 'Add new screenshot_before.png',
     content: beforeScreenshot,
-    sha: beforeFileSha, // Include the latest sha value
     branch: branchName
   });
 
-  // Fetch the latest sha for screenshot_after.png
   const { data: afterFileData } = await octokit.repos.getContent({
     owner: OWNER,
     repo: REPO,
@@ -148,18 +150,24 @@ async function createPR() {
   });
   const afterFileSha = afterFileData.sha;
 
-  // Update screenshot_after.png
+  await octokit.repos.deleteFile({
+    owner: OWNER,
+    repo: REPO,
+    path: 'screenshot_after.png',
+    message: 'Delete old screenshot_after.png',
+    sha: afterFileSha,
+    branch: branchName
+  });
+
   await octokit.repos.createOrUpdateFileContents({
     owner: OWNER,
     repo: REPO,
     path: 'screenshot_after.png',
-    message: 'Update screenshot_after.png',
+    message: 'Add new screenshot_after.png',
     content: afterScreenshot,
-    sha: afterFileSha, // Include the latest sha value
     branch: branchName
   });
 
-  // Create a pull request
   await octokit.pulls.create({
     owner: OWNER,
     repo: REPO,
@@ -169,4 +177,5 @@ async function createPR() {
     body: 'Automated PR to update screenshots after running the script.'
   });
 }
+
 
