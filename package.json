@@ -1,0 +1,11 @@
+{
+  "type": "module",
+  "scripts": {
+    "start": "node check.js",
+    "test": "node check.js"
+  },
+  "dependencies": {
+    "@octokit/rest": "^21.0.0",
+    "puppeteer": "^22.12.0"
+  }
+}

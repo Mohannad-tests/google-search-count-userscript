@@ -1,0 +1,52 @@
+name: Check Google Element
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  check-google:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v2
+      with:
+        node-version: '14'
+
+    - name: Cache Node.js modules
+      id: cache-node-modules
+      uses: actions/cache@v3
+      with:
+        path: node_modules
+        key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-node-
+
+    - name: Install dependencies
+      if: steps.cache-node-modules.outputs.cache-hit != 'true'
+      run: npm install
+
+    - name: Check for existing issues
+      id: check-issues
+      uses: actions/github-script@v3
+      with:
+        script: |
+          const issues = await github.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open'
+          });
+          const existingIssue = issues.data.find(issue => issue.title === 'Element not found error in check-google.js');
+          return existingIssue ? 'true' : 'false';
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Run Puppeteer script
+      if: steps.check-issues.outputs.result != 'true'
+      run: npm run start
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
